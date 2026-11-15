@@ -5,13 +5,13 @@ const ROT = [0.9427546655283462,-0.3334870921408144,0.9689124217106447,-0.247403
 export const HZ = 60, SECS = 120, TICKS = HZ * SECS;
 export const R = 1, BR = 0.045;
 export const MAXB = 30, MAXS = 12, MAXA = 40;
-const V0 = 1.25, VK = 1.16;
+const V0 = 2.1, VK = 1.13;
 // 円ごとの体力
 export function hpOf(k) { let h = 6; for (let i = 0; i < k; i++) h *= 1.2; return Math.ceil(h); }
 // 攻撃力
 export function dmgOf(L) { let d = 1 + L; for (let i = 0; i < L; i++) d *= 1.06; return Math.floor(d); }
 // 強化の値段（0：ボール、1：速さ、2：攻撃力）
-const BASE = [8, 5, 6], GROW = [1.42, 1.55, 1.38];
+const BASE = [6, 4, 5], GROW = [1.42, 1.55, 1.38];
 export function costOf(type, L) { let c = BASE[type]; for (let i = 0; i < L; i++) c *= GROW[type]; return Math.floor(c); }
 export const maxOf = type => type === 0 ? MAXB - 1 : type === 1 ? MAXS : MAXA;
 // 円をこわしたときのごほうび

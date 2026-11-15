@@ -112,6 +112,7 @@ function onBreak(s, kNew) {
   if (shards.instanceColor) shards.instanceColor.needsUpdate = true;
   const w = waves[wvK++ % waves.length]; w.visible = true; w.userData.l = 1; w.material.color.copy(col);
   V.k = kNew; recolor(kNew); V.shift = 1; V.shake = Math.min(1, V.shake + .5); V.flash = 0;
+  pxBreak(kNew, col);
   if (!V.quiet) sBreak(kNew);
 }
 function handleEv(s) { const ev = s.ev; for (let i = 0; i < ev.length; i += 3) { if (ev[i] < 0) onBreak(s, ev[i + 1]); else onHit(s, ev[i + 1], ev[i + 2]); } ev.length = 0; }
@@ -166,7 +167,7 @@ function upsText(s) {
 }
 function hudText(s) {
   const left = Math.max(0, (TK - s.tick) / HZ); $('hTime').textContent = left.toFixed(1); $('tfill').style.transform = 'scaleX(' + (left / SECS).toFixed(4) + ')'; $('hud').classList.toggle('hurry', left <= warnOf(SECS) && mode === 'play');
-  $('hRings').innerHTML = s.k + '<i>' + esc(t('unit')) + '</i>'; $('coinRow').innerHTML = fmt(s.coins) + '<i>' + esc(t('coin') || '●') + '</i>';
+  gsBump(s.k); $('hRings').innerHTML = s.k + '<i>' + esc(t('unit')) + '</i>'; $('coinRow').innerHTML = fmt(s.coins) + '<i>' + esc(t('coin') || '●') + '</i>';
 }
 function tryBuy(y) {
   if (mode !== 'play' || !G) return; ac();
@@ -178,7 +179,7 @@ addEventListener('keydown', e => { if (e.key === '1') tryBuy(0); else if (e.key 
 // ===== 遊ぶ =====
 function startGame(secs) {
   if (MODES.includes(secs)) { SECS = secs; TK = secs * HZ; ls.set('en_mode', secs); }
-  ac(); sTap(); G = S.create(); LOG = []; acc = 0; FIN = null; lastSec = -1; viewReset(G); mode = 'count'; cd = 1.8; cdN = 4; show(null); $('hud').hidden = false; $('ups').hidden = false; frame(); upsText(G); hudText(G); big('');
+  ac(); sTap(); G = S.create(); LOG = []; acc = 0; FIN = null; lastSec = -1; hudK = -1; viewReset(G); mode = 'count'; cd = 1.8; cdN = 4; show(null); $('hud').hidden = false; $('ups').hidden = false; frame(); upsText(G); hudText(G); big('');
   const run = { state: 'pending', st: 0, secs: SECS }; RUN = run; netStart(SECS).then(r => { run.state = r.state; run.st = r.st; }, () => { run.state = 'off'; });
   try { if (typeof gtag === 'function') gtag('event', 'game_start', { game: GAME, secs: SECS }); } catch (e) { }
 }
@@ -203,7 +204,7 @@ function showResult(first) {
   $('rFacts').textContent = t('resLv', { b: F.lv[0] + 1, s: F.lv[1] + 1, a: fmt(F.dmg) });
   recUI();
   $('xBtn').textContent = t('xpost'); $('imgBtn').textContent = t('img'); $('vidBtn').textContent = t('video'); $('againBtn').textContent = t('again'); $('topBtn').textContent = t('top'); $('rRank').textContent = t('rank');
-  $('result').querySelector('.card').scrollTop = 0;
+  $('result').querySelector('.card').scrollTop = 0; if (first) gsResult(F);
   if (first) fxConfetti(clamp(F.k * 3, 20, 140));
 }
 function recUI() {
@@ -236,15 +237,49 @@ function applyLang() {
 const cheapest = s => { let b = -1, bc = 1e18; for (let y = 0; y < 3; y++) { if (s.lv[y] >= S.maxOf(y)) continue; const c = S.costOf(y, s.lv[y]); if (c < bc) { bc = c; b = y; } } return s.coins >= bc ? b : -1; };
 function demoNew(pre) { DEMO = S.create(); for (let i = 0; i < pre; i++) { const y = cheapest(DEMO); if (y >= 0) S.buy(DEMO, y); S.step(DEMO); DEMO.ev.length = 0; } viewReset(DEMO); }
 function demoStep(dt) { if (!DEMO || DEMO.tick >= TICKS) demoNew(HZ * 20); acc += dt; let n = Math.floor(acc * HZ); acc -= n / HZ; if (n > 6) { n = 6; acc = 0; } V.budget = 10; V.quiet = true; for (let i = 0; i < n; i++) { const y = cheapest(DEMO); if (y >= 0) S.buy(DEMO, y); S.step(DEMO); handleEv(DEMO); } V.quiet = false; }
-function showTitle() { mode = 'title'; show('title'); $('hud').hidden = true; $('ups').hidden = true; big(''); fxReset(); G = null; demoNew(HZ * (18 + Math.floor(Math.random() * 30))); acc = 0; frame(); }
+function showTitle() { mode = 'title'; show('title'); $('hud').hidden = true; $('ups').hidden = true; big(''); fxReset(); G = null; demoNew(HZ * (18 + Math.floor(Math.random() * 30))); acc = 0; frame(); gsTitle(); }
 MODES.forEach(m => { $('m' + m).onclick = () => startGame(m); });
 $('rankBtn').onclick = () => openRank(+ls.get('en_mode', 120), 'd', 'title');
+
+// ===== ドット絵の演出（道具箱の pixelfx。MIT） =====
+// 円がこわれるたびに、ふちから光がはじける。10個ごとに真ん中でプラズマ爆発。読みこめなくてもゲームはそのまま動く
+const PX = { ok: false, core: null, mods: {}, list: [], frame: null, img: null, cv: document.createElement('canvas'), g: null, s: 3, w: 0, h: 0, vw: innerWidth, vh: innerHeight };
+PX.g = PX.cv.getContext('2d');
+if (!OGP && !ICON) Promise.all([import('./pixelfx/core/index.js'), import('./pixelfx/fx/pickups/collect-burst.js'), import('./pixelfx/fx/explosions/plasma-explosion.js')]).then(([c, a, b]) => { PX.core = c; PX.mods.burst = a; PX.mods.plasma = b; PX.ok = true; }).catch(() => { });
+function pxView(W, Hh) { PX.vw = W; PX.vh = Hh; PX.s = Math.max(2, Math.round(Math.min(W, Hh) / 130)); }
+function pxPal(col, n) { const out = [], dark = new THREE.Color(0x0a0620), wh = new THREE.Color(0xffffff), c = new THREE.Color(); for (let i = 0; i < n; i++) { const k = i / (n - 1); if (k < .6) c.copy(dark).lerp(col, k / .6); else c.copy(col).lerp(wh, (k - .6) / .4); out.push('#' + c.getHexString()); } return out; }
+function pxSpawn(name, sx, sy, col) { if (!PX.ok || PX.list.length >= 14) return; try { PX.list.push(PX.core.createFx(PX.mods[name], { x: Math.round(sx / PX.s), y: Math.round(sy / PX.s), palette: pxPal(col, name === 'burst' ? 8 : 7), seed: (Math.random() * 1e6) | 0 })); } catch (e) { } }
+function pxBreak(kNew, col) {
+  if (!PX.ok) return; const W = PX.vw, Hh = PX.vh;
+  const a0 = Math.random() * Math.PI * 2; for (let q = 0; q < 3; q++) { const a = a0 + q * 2.09 + (Math.random() - .5) * .6; const p = proj(Math.cos(a), 0, Math.sin(a), W, Hh); pxSpawn('burst', p[0], p[1] + 40 * PX.s, col); }
+  if (kNew > 0 && kNew % 10 === 0) { const p = proj(0, 0, 0, W, Hh); pxSpawn('plasma', p[0], p[1], col); }
+}
+function pxReset() { PX.list.length = 0; }
+function pxStep(dt) { if (!PX.list.length) return; for (const f of PX.list) f.update(dt); PX.list = PX.list.filter(f => !f.done()); }
+function pxDraw(g2, W, Hh) {
+  if (!PX.ok || !PX.list.length) return; const w = Math.ceil(W / PX.s), h = Math.ceil(Hh / PX.s);
+  if (!PX.frame || PX.w !== w || PX.h !== h) { PX.w = w; PX.h = h; PX.frame = PX.core.createFrame(w, h); PX.img = new ImageData(w, h); PX.cv.width = w; PX.cv.height = h; }
+  PX.core.clearFrame(PX.frame); for (const f of PX.list) f.draw(PX.frame); PX.core.composite(PX.frame, PX.img.data, null); PX.g.putImageData(PX.img, 0, 0);
+  g2.save(); g2.imageSmoothingEnabled = false; g2.globalCompositeOperation = 'lighter'; g2.drawImage(PX.cv, 0, 0, w * PX.s, h * PX.s); g2.restore();
+}
+
+// ===== 画面の動き（道具箱の GSAP。読みこめないときは動きなしで出す） =====
+const GS = () => window.gsap || null;
+let hudK = -1;
+function gsBump(k) { const g = GS(); if (!g || k === hudK) { hudK = k; return; } const first = hudK < 0; hudK = k; if (first) return; g.fromTo($('hRings'), { scale: 1.45 }, { scale: 1, duration: .35, ease: 'back.out(3)', overwrite: true }); }
+function gsTitle() { const g = GS(); if (!g) return; g.fromTo($('tTitle'), { scale: .3, rotation: -12 }, { scale: 1, rotation: 0, duration: .9, ease: 'elastic.out(1,.45)', overwrite: true }); g.fromTo('#title .modes button', { y: 26, scale: .85 }, { y: 0, scale: 1, duration: .5, ease: 'back.out(2.2)', stagger: .07, delay: .15, overwrite: true }); }
+function gsResult(F) {
+  const g = GS(); if (!g) return; const card = $('result').querySelector('.card');
+  g.fromTo(card, { y: 70 }, { y: 0, duration: .55, ease: 'back.out(1.6)', overwrite: true });
+  const o = { n: 0 }; g.to(o, { n: F.k, duration: Math.min(1.6, .5 + F.k * .02), ease: 'power3.out', delay: .15, onUpdate: () => { $('rPct').innerHTML = esc(t('resN', { n: Math.round(o.n) })); }, onComplete: () => { $('rPct').innerHTML = esc(t('resN', { n: F.k })); g.fromTo($('rPct'), { scale: 1.25 }, { scale: 1, duration: .5, ease: 'elastic.out(1,.4)' }); } });
+  g.fromTo(['#rDev', '#rFacts'], { y: 14, opacity: 0 }, { y: 0, opacity: 1, duration: .4, stagger: .1, delay: .35, ease: 'power2.out', overwrite: true });
+}
 
 // ===== 効果（紙ふぶき・真ん中の数字） =====
 const FXC = $('fx'), fxg = FXC.getContext('2d'); let fxW = 0, fxH = 0;
 const FX = { conf: [] };
 function fxSize() { const d = Math.min(2, window.devicePixelRatio || 1); fxW = innerWidth; fxH = innerHeight; FXC.width = fxW * d; FXC.height = fxH * d; fxg.setTransform(d, 0, 0, d, 0, 0); }
-function fxReset() { FX.conf = []; }
+function fxReset() { FX.conf = []; pxReset(); }
 function fxConfetti(n) { const C = ['#ffd23a', '#ff5d73', '#b46cff', '#3fd28b', '#4aa8ff', '#ffffff', '#ff9f1c']; for (let i = 0; i < n; i++)FX.conf.push({ x: .5 + (Math.random() - .5) * .3, y: .2, vx: (Math.random() - .5) * 1.1, vy: -.5 - Math.random() * .9, r: Math.random() * 6.28, vr: (Math.random() - .5) * 12, c: C[i % C.length], s: 5 + Math.random() * 6, l: 2.2 + Math.random() * 1.2 }); }
 function fxStep(dt) { for (const c of FX.conf) { c.vy += 1.5 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.r += c.vr * dt; c.l -= dt; } FX.conf = FX.conf.filter(c => c.l > 0 && c.y < 1.2); }
 function drawFX(g2, W, Hh) { for (const c of FX.conf) { g2.save(); g2.translate(c.x * W, c.y * Hh); g2.rotate(c.r); g2.fillStyle = c.c; g2.globalAlpha = Math.min(1, c.l); g2.fillRect(-c.s / 2, -c.s / 3, c.s, c.s * .66); g2.restore(); } }
@@ -306,13 +341,13 @@ async function makeVideo() {
   const CARD = 3.4;
   await new Promise(res => {
     function step(now) {
-      const real = Math.min(.3, (now - last) / 1000), dt = Math.min(.05, real); last = now; T += real; TIME += dt;
+      const real = Math.min(.3, (now - last) / 1000), dt = Math.min(.05, real); last = now; T += real; TIME += dt; pxView(W, Hh);
       if (endAt < 0) {
         a2 += real * SPEED; let n = Math.floor(a2 * HZ); a2 -= n / HZ; if (n > 200) n = 200; V.budget = 14; // おそい端末でも、動画の長さが同じになるようにする
         for (let q = 0; q < n && s.tick < VT; q++) { while (j < F.log.length && F.log[j][0] === s.tick) { S.buy(s, F.log[j][1]); j++; } S.step(s); handleEv(s); }
         if (s.tick >= VT) { endAt = T; sFin(); fxConfetti(clamp(F.k * 3, 20, 140)); setCam(W, Hh, 110, Hh * .42, 1); }
       }
-      viewSync(s, dt); fxStep(dt); R.render(SC, CAM); g2.clearRect(0, 0, W, Hh); g2.drawImage(R.domElement, 0, 0, W, Hh); drawHP(g2, W, Hh, s);
+      viewSync(s, dt); fxStep(dt); pxStep(dt); R.render(SC, CAM); g2.clearRect(0, 0, W, Hh); g2.drawImage(R.domElement, 0, 0, W, Hh); drawHP(g2, W, Hh, s); pxDraw(g2, W, Hh);
       if (endAt >= 0) drawCard(g2, W, Hh, F, sm((T - endAt - .3) / .4), Hh * .6);
       else {
         g2.save(); g2.lineJoin = 'round'; g2.strokeStyle = '#000c'; const left = Math.max(0, (VT - s.tick) / HZ);
@@ -413,7 +448,7 @@ $('rankBack').onclick = () => { if (RK.from === 'fin' && FIN) showResult(false);
 let last = performance.now();
 const cv = $('c');
 function frameStep(dt) {
-  TIME += dt;
+  TIME += dt; pxView(fxW || innerWidth, fxH || innerHeight);
   for (const s of bokeh) s.material.opacity = s.userData.o * (.75 + .25 * Math.sin(TIME * s.userData.w + s.userData.p));
   let st = G;
   if (mode === 'title' || (!G && DEMO)) { if (mode === 'title') demoStep(dt); st = DEMO; }
@@ -421,10 +456,10 @@ function frameStep(dt) {
   else if (mode === 'play') playStep(dt);
   else if (mode === 'fin') { finT -= dt; if (finT <= 0) showResult(true); }
   if (st) viewSync(st, dt);
-  fxStep(dt);
+  fxStep(dt); pxStep(dt);
   const sh = V.shake; cv.style.transform = sh > .01 && mode !== 'title' ? 'translate(' + ((Math.random() - .5) * 9 * sh) + 'px,' + ((Math.random() - .5) * 9 * sh) + 'px)' : '';
   R.render(SC, CAM);
-  fxg.clearRect(0, 0, fxW, fxH); if (st && mode !== 'title' && mode !== 'rank' && mode !== 'share') drawHP(fxg, fxW, fxH, st); drawFX(fxg, fxW, fxH);
+  fxg.clearRect(0, 0, fxW, fxH); if (st && mode !== 'title' && mode !== 'rank' && mode !== 'share') drawHP(fxg, fxW, fxH, st); if (mode !== 'rank' && mode !== 'share') pxDraw(fxg, fxW, fxH); drawFX(fxg, fxW, fxH);
 }
 function loop(now) {
   requestAnimationFrame(loop); const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now; if (mode === 'video') return; if (PV && PV.manual) return;

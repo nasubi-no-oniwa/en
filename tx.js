@@ -3,7 +3,7 @@ export const LANGS = [['ja', '日本語'], ['en', 'English'], ['zh', '繁中'], 
 export const TX = {
  ja: {
  hud: '円', title: '円', sub: '120秒で、円をいくつこわせるか',
- how: 'ボールが当たるたびに、円の体力がへる。<br>当たるとお金（円）がたまるので、<b>ボールの数・速さ・攻撃力</b>を強化しよう。<br>いつ何を強化するかで、結果が変わる。',
+ how: 'ボールが当たるたびに、円の体力がへって、お金が1円たまる。<br><b>ボール・速さ</b>はお金がたまりやすくなり、<b>攻撃力</b>は円を早くこわせる。<br>いつ、何を強化するかで結果が変わる。',
  start: 'スタート', rank: 'ランキング', go: 'スタート！', fin: 'そこまで！',
  timeL: 'のこり', ringsL: 'こわした円', unit: '個', coin: '円',
  upB: 'ボール', upS: '速さ', upA: '攻撃力', upBv: '{n}個', upSv: 'Lv{n}', upAv: '{n}', max: 'MAX',
@@ -20,7 +20,7 @@ export const TX = {
  },
  en: {
  hud: 'EN', title: '円', sub: 'How many rings can you break in 120 seconds?',
- how: 'Every hit takes HP off the ring.<br>Hits earn coins, so upgrade your <b>ball count, speed and power</b>.<br>What you upgrade, and when, changes the result.',
+ how: 'Every hit takes HP off the ring and earns 1 coin.<br><b>Balls and Speed</b> earn coins faster; <b>Power</b> breaks rings faster.<br>What you upgrade, and when, changes the result.',
  start: 'Start', rank: 'Ranking', go: 'GO!', fin: 'TIME!',
  timeL: 'Time', ringsL: 'Rings broken', unit: '', coin: '',
  upB: 'Balls', upS: 'Speed', upA: 'Power', upBv: '×{n}', upSv: 'Lv{n}', upAv: '{n}', max: 'MAX',
@@ -37,7 +37,7 @@ export const TX = {
  },
  zh: {
  hud: '円', title: '円', sub: '120秒內，能打碎幾個圓？',
- how: '球每撞一次，圓的體力就減少。<br>撞到就能賺錢，拿來強化<b>球數・速度・攻擊力</b>。<br>什麼時候強化什麼，結果就會不同。',
+ how: '球每撞一次，圓的體力就減少，並賺到1円。<br><b>球數・速度</b>讓錢賺得更快，<b>攻擊力</b>讓圓碎得更快。<br>什麼時候強化什麼，結果就會不同。',
  start: '開始', rank: '排行榜', go: '開始！', fin: '時間到！',
  timeL: '剩餘', ringsL: '打碎的圓', unit: '個', coin: '円',
  upB: '球數', upS: '速度', upA: '攻擊力', upBv: '{n}顆', upSv: 'Lv{n}', upAv: '{n}', max: 'MAX',
@@ -54,7 +54,7 @@ export const TX = {
  },
  ko: {
  hud: '円', title: '円', sub: '120초 동안 원을 몇 개 부술 수 있을까',
- how: '공이 부딪힐 때마다 원의 체력이 줄어든다.<br>부딪히면 돈이 쌓이니 <b>공 개수·속도·공격력</b>을 강화하자.<br>언제 무엇을 강화하느냐에 따라 결과가 달라진다.',
+ how: '공이 부딪힐 때마다 원의 체력이 줄고 1円이 쌓인다.<br><b>공·속도</b>는 돈이 더 빨리 쌓이고, <b>공격력</b>은 원을 더 빨리 부순다.<br>언제 무엇을 강화하느냐에 따라 결과가 달라진다.',
  start: '시작', rank: '랭킹', go: '시작!', fin: '거기까지!',
  timeL: '남은 시간', ringsL: '부순 원', unit: '개', coin: '円',
  upB: '공', upS: '속도', upA: '공격력', upBv: '{n}개', upSv: 'Lv{n}', upAv: '{n}', max: 'MAX',

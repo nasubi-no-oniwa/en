@@ -282,7 +282,7 @@ $('vidBtn').onclick = () => { if (!vidBusy && FIN) makeVideo(); };
 $('vBack').onclick = () => { showResult(false); };
 function makeImage() {
   const F = FIN, W = 1080, Hh = 1350; const c = document.createElement('canvas'); c.width = W; c.height = Hh; const g2 = c.getContext('2d');
-  R.setPixelRatio(1); R.setSize(W, Hh, false); setCam(W, Hh, 190, Hh * .43, 1); viewSync(G, 0); R.render(SC, CAM); g2.drawImage(R.domElement, 0, 0, W, Hh); drawHP(g2, W, Hh, G); drawBrand(g2, W, Hh); drawCard(g2, W, Hh, F, 1, Hh * .6);
+  R.setPixelRatio(1); R.setSize(W, Hh, false); setCam(W, Hh, 150, Hh * .41, 1.22); viewSync(G, 0); R.render(SC, CAM); g2.drawImage(R.domElement, 0, 0, W, Hh); drawHP(g2, W, Hh, G); drawBrand(g2, W, Hh); drawCard(g2, W, Hh, F, 1, Hh * .6);
   c.toBlob(b => { shareDone(b, 'png'); }, 'image/png');
 }
 async function makeVideo() {
@@ -302,9 +302,9 @@ async function makeVideo() {
   const CARD = 3.4;
   await new Promise(res => {
     function step(now) {
-      const dt = Math.min(.05, (now - last) / 1000); last = now; T += dt; TIME += dt;
+      const real = Math.min(.3, (now - last) / 1000), dt = Math.min(.05, real); last = now; T += real; TIME += dt;
       if (endAt < 0) {
-        a2 += dt * SPEED; let n = Math.floor(a2 * HZ); a2 -= n / HZ; if (n > 40) n = 40; V.budget = 14;
+        a2 += real * SPEED; let n = Math.floor(a2 * HZ); a2 -= n / HZ; if (n > 200) n = 200; V.budget = 14; // おそい端末でも、動画の長さが同じになるようにする
         for (let q = 0; q < n && s.tick < TICKS; q++) { while (j < F.log.length && F.log[j][0] === s.tick) { S.buy(s, F.log[j][1]); j++; } S.step(s); handleEv(s); }
         if (s.tick >= TICKS) { endAt = T; sFin(); fxConfetti(clamp(F.k * 3, 20, 140)); setCam(W, Hh, 110, Hh * .42, 1); }
       }
@@ -398,8 +398,8 @@ async function openRank(when, from) {
   const box = $('rankBox'); box.innerHTML = '<p>' + t('loading') + '</p>';
   const rowH = (r, me) => '<tr' + (me ? ' class="me"' : '') + '><td class="r">' + r.rk + '</td><td class="n">' + esc(r.n) + '</td><td class="c">' + esc(t('rowS', { n: r.rings, p: r.pct })) + '</td></tr>';
   try {
-    let rows; if (NONET) { rows = [{ n: '円こわし名人', rings: 52, pct: 31, rk: 1 }, { n: ls.get('en_name', 'なすび'), rings: 47, pct: 80, rk: 2, me: 1 }, { n: 'のんびり', rings: 33, pct: 5, rk: 3 }]; } else rows = await loadBoard(when);
-    RK.rows = rows; const myId = (ls.get('en_auth', null) || {}).uid; let h = '<table class="rank">' + rows.slice(0, TOPN).map(r => rowH(r, r.me || r.id === myId)).join(''); if (!rows.length) h += '<tr><td></td><td colspan="2">' + t('empty') + '</td></tr>'; box.innerHTML = h + '</table>';
+    let rows; if (NONET) { rows = [{ n: '円こわし名人', rings: 72, pct: 31, rk: 1 }, { n: ls.get('en_name', 'なすび'), rings: 64, pct: 80, rk: 2, me: 1 }, { n: 'のんびり', rings: 41, pct: 5, rk: 3 }]; } else rows = await loadBoard(when);
+    RK.rows = rows; const myId = (ls.get('en_auth', null) || {}).uid; let h = '<table class="rank">' + rows.slice(0, TOPN).map(r => rowH(r, r.me || (!!myId && r.id === myId))).join(''); if (!rows.length) h += '<tr><td></td><td colspan="2">' + t('empty') + '</td></tr>'; box.innerHTML = h + '</table>';
   } catch (e) { box.innerHTML = '<p>' + t('rankerr') + '</p>'; }
 }
 $('rankBack').onclick = () => { if (RK.from === 'fin' && FIN) showResult(false); else showTitle(); };

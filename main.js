@@ -156,8 +156,11 @@ function frame() {
   else if (mode === 'title') setCam(VW, VH, 0, 0, land ? 1 : 1.5);
   else setCam(VW, VH, 78, Math.min(190, VH * .27), 1);
 }
-function resize() { if (OGP || ICON) return; VW = innerWidth; VH = innerHeight; R.setSize(VW, VH, false); fxSize(); frame(); }
-addEventListener('resize', resize);
+// 画面の本当の大きさ（Xなどのアプリ内ブラウザでは innerHeight がずれて、円が縦にのびることがあるので、絵の箱そのものの大きさを見る）
+function realSize() { const c = $('c'); const w = c.clientWidth || innerWidth, h = c.clientHeight || innerHeight; return [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))]; }
+function resize() { if (OGP || ICON) return; const [w, h] = realSize(); VW = w; VH = h; R.setSize(VW, VH, false); fxSize(); frame(); }
+addEventListener('resize', resize); addEventListener('orientationchange', () => setTimeout(resize, 200)); try { if (window.visualViewport) visualViewport.addEventListener('resize', resize); } catch (e) { }
+let sizeChk = 0; function sizeWatch(dt) { sizeChk -= dt; if (sizeChk > 0) return; sizeChk = .25; const [w, h] = realSize(); if (w !== VW || h !== VH) resize(); }
 
 // 強化のボタン
 const UPS = ['upB', 'upS', 'upA'];
@@ -278,7 +281,7 @@ function gsResult(F) {
 // ===== 効果（紙ふぶき・真ん中の数字） =====
 const FXC = $('fx'), fxg = FXC.getContext('2d'); let fxW = 0, fxH = 0;
 const FX = { conf: [] };
-function fxSize() { const d = Math.min(2, window.devicePixelRatio || 1); fxW = innerWidth; fxH = innerHeight; FXC.width = fxW * d; FXC.height = fxH * d; fxg.setTransform(d, 0, 0, d, 0, 0); }
+function fxSize() { const d = Math.min(2, window.devicePixelRatio || 1); fxW = VW > 1 ? VW : innerWidth; fxH = VH > 1 ? VH : innerHeight; FXC.width = fxW * d; FXC.height = fxH * d; fxg.setTransform(d, 0, 0, d, 0, 0); }
 function fxReset() { FX.conf = []; pxReset(); }
 function fxConfetti(n) { const C = ['#ffd23a', '#ff5d73', '#b46cff', '#3fd28b', '#4aa8ff', '#ffffff', '#ff9f1c']; for (let i = 0; i < n; i++)FX.conf.push({ x: .5 + (Math.random() - .5) * .3, y: .2, vx: (Math.random() - .5) * 1.1, vy: -.5 - Math.random() * .9, r: Math.random() * 6.28, vr: (Math.random() - .5) * 12, c: C[i % C.length], s: 5 + Math.random() * 6, l: 2.2 + Math.random() * 1.2 }); }
 function fxStep(dt) { for (const c of FX.conf) { c.vy += 1.5 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.r += c.vr * dt; c.l -= dt; } FX.conf = FX.conf.filter(c => c.l > 0 && c.y < 1.2); }
@@ -448,7 +451,7 @@ $('rankBack').onclick = () => { if (RK.from === 'fin' && FIN) showResult(false);
 let last = performance.now();
 const cv = $('c');
 function frameStep(dt) {
-  TIME += dt; pxView(fxW || innerWidth, fxH || innerHeight);
+  TIME += dt; sizeWatch(dt); pxView(fxW || innerWidth, fxH || innerHeight);
   for (const s of bokeh) s.material.opacity = s.userData.o * (.75 + .25 * Math.sin(TIME * s.userData.w + s.userData.p));
   let st = G;
   if (mode === 'title' || (!G && DEMO)) { if (mode === 'title') demoStep(dt); st = DEMO; }

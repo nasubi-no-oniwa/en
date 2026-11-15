@@ -12,9 +12,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <title>円</title>
-<meta name="description" content="120秒で、円をいくつこわせるか。ボールが当たるたびに円の体力がへる。ボールの数・速さ・攻撃力を、いつ強化するかで結果が変わる。">
+<meta name="description" content="30秒・60秒・120秒で、円をいくつこわせるか。ボールが当たるたびに円の体力がへる。ボールの数・速さ・攻撃力を、いつ強化するかで結果が変わる。">
 <meta property="og:title" content="円">
-<meta property="og:description" content="120秒で、円をいくつこわせるか。ボールが当たるたびに円の体力がへる。ボールの数・速さ・攻撃力を、いつ強化するかで結果が変わる。">
+<meta property="og:description" content="30秒・60秒・120秒で、円をいくつこわせるか。ボールが当たるたびに円の体力がへる。ボールの数・速さ・攻撃力を、いつ強化するかで結果が変わる。">
 <meta property="og:image" content="https://nasubi-no-oniwa.github.io/en/ogp.png">
 <meta property="og:url" content="https://nasubi-no-oniwa.github.io/en/">
 <meta name="twitter:card" content="summary_large_image">
@@ -68,6 +68,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .card button{display:block;width:100%;margin-top:8px;padding:12px;border:none;border-radius:12px;font-size:16px;font-weight:800;font-family:inherit;background:var(--pur);color:#fff;cursor:pointer;text-shadow:0 1px 0 #0003}
 .card button.huge{padding:16px;font-size:21px;background:#e0a100;box-shadow:0 5px 0 #a87800;margin-top:10px}
 .card button.huge:active{transform:translateY(3px);box-shadow:0 2px 0 #a87800}
+.card .modes{display:flex;gap:8px}.card .modes button.huge{flex:1;min-width:0;margin-top:6px;padding:16px 2px;white-space:nowrap}
 .card button.sub{background:#ece7da;color:var(--ink);font-size:15px;text-shadow:none}
 .card button.x{background:#000;color:#fff}
 .card button.vid{background:#d8352a;color:#fff}
@@ -163,7 +164,8 @@ if(document.body)go();else document.addEventListener('DOMContentLoaded',go);
   <h1 id="tTitle"></h1>
   <div class="sub2" id="tSub"></div>
   <p id="tHow"></p>
-  <button class="huge" id="startBtn"></button>
+  <div class="sub2" id="tPick" style="margin-top:12px"></div>
+  <div class="modes"><button class="huge" id="m30"></button><button class="huge" id="m60"></button><button class="huge" id="m120"></button></div>
   <button class="sub" id="rankBtn"></button>
   <div id="langs"></div>
  </div>
@@ -202,6 +204,7 @@ if(document.body)go();else document.addEventListener('DOMContentLoaded',go);
 <div class="panel" id="rankPanel" hidden>
  <div class="card">
   <h2 id="rkTitle"></h2>
+  <div class="tabs" id="rkMode"><button data-m="30"></button><button data-m="60"></button><button data-m="120"></button></div>
   <div class="tabs" id="rkWhen"><button data-w="d"></button><button data-w="all"></button></div>
   <p class="note" id="rkNote"></p>
   <div id="rankBox"></div>
@@ -209,6 +212,6 @@ if(document.body)go();else document.addEventListener('DOMContentLoaded',go);
  </div>
 </div>
 
-<script type="module" src="main.js?v=1"></script>
+<script type="module" src="main.js?v=2"></script>
 </body>
 </html>

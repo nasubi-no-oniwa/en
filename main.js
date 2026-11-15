@@ -1,8 +1,8 @@
 // 円：120秒で、跳ねるボールが円をいくつこわせるか。強化（ボールの数・速さ・攻撃力）のしかたで結果が変わる
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import * as S from './sim.js?v=1';
-import { TX, LANGS } from './tx.js?v=1';
+import * as S from './sim.js?v=2';
+import { TX, LANGS } from './tx.js?v=2';
 
 const $ = id => document.getElementById(id);
 const ls = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch (e) { return d } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch (e) { } } };
@@ -15,7 +15,10 @@ const lerp = (a, b, k) => a + (b - a) * k;
 const sm = k => { k = clamp(k, 0, 1); return k * k * (3 - 2 * k); };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const FF = '"Hiragino Maru Gothic ProN","Rounded Mplus 1c","Noto Sans CJK JP","Noto Sans JP",system-ui,sans-serif';
-const HZ = S.HZ, TICKS = S.TICKS;
+const HZ = S.HZ, TICKS = S.TICKS, MODES = [30, 60, 120];
+let SECS = 120, TK = TICKS; // いま遊んでいる組（30秒・60秒・120秒）
+const warnOf = s => s <= 30 ? 5 : 10; // のこり何秒からあせらせるか
+const BP = s => s === 120 ? 'b' : 'b' + s; // ランキングの置き場所（120秒は前からの b のまま）
 
 // ===== ことば =====
 let lang = (q => ['ja', 'en', 'zh', 'ko'].includes(q) ? q : null)(QS.get('lang')) || ls.get('en_lang', null) || (n => n.startsWith('ja') ? 'ja' : n.startsWith('zh') ? 'zh' : n.startsWith('ko') ? 'ko' : 'en')((navigator.language || 'ja').toLowerCase());
@@ -162,7 +165,7 @@ function upsText(s) {
   UPS.forEach((id, y) => { const b = $(id), mx = s.lv[y] >= S.maxOf(y), c = S.costOf(y, s.lv[y]); const key = lang + '|' + s.lv[y]; if (b.dataset.k !== key) { b.dataset.k = key; b.innerHTML = '<b>' + esc(t(['upB', 'upS', 'upA'][y])) + '</b><u>' + esc(vals[y]) + '</u><s>' + (mx ? t('max') : fmt(c) + esc(t('coin') || '')) + '</s>'; } const can = !mx && s.coins >= c && mode === 'play'; if (b.classList.contains('can') !== can) b.classList.toggle('can', can); if (b.classList.contains('maxed') !== mx) b.classList.toggle('maxed', mx); });
 }
 function hudText(s) {
-  const left = Math.max(0, (TICKS - s.tick) / HZ); $('hTime').textContent = left.toFixed(1); $('tfill').style.transform = 'scaleX(' + (left / S.SECS).toFixed(4) + ')'; $('hud').classList.toggle('hurry', left <= 10 && mode === 'play');
+  const left = Math.max(0, (TK - s.tick) / HZ); $('hTime').textContent = left.toFixed(1); $('tfill').style.transform = 'scaleX(' + (left / SECS).toFixed(4) + ')'; $('hud').classList.toggle('hurry', left <= warnOf(SECS) && mode === 'play');
   $('hRings').innerHTML = s.k + '<i>' + esc(t('unit')) + '</i>'; $('coinRow').innerHTML = fmt(s.coins) + '<i>' + esc(t('coin') || '●') + '</i>';
 }
 function tryBuy(y) {
@@ -173,29 +176,30 @@ UPS.forEach((id, y) => { $(id).addEventListener('pointerdown', e => { e.preventD
 addEventListener('keydown', e => { if (e.key === '1') tryBuy(0); else if (e.key === '2') tryBuy(1); else if (e.key === '3') tryBuy(2); });
 
 // ===== 遊ぶ =====
-function startGame() {
+function startGame(secs) {
+  if (MODES.includes(secs)) { SECS = secs; TK = secs * HZ; ls.set('en_mode', secs); }
   ac(); sTap(); G = S.create(); LOG = []; acc = 0; FIN = null; lastSec = -1; viewReset(G); mode = 'count'; cd = 1.8; cdN = 4; show(null); $('hud').hidden = false; $('ups').hidden = false; frame(); upsText(G); hudText(G); big('');
-  const run = { state: 'pending', st: 0 }; RUN = run; netStart().then(r => { run.state = r.state; run.st = r.st; }, () => { run.state = 'off'; });
-  try { if (typeof gtag === 'function') gtag('event', 'game_start', { game: GAME }); } catch (e) { }
+  const run = { state: 'pending', st: 0, secs: SECS }; RUN = run; netStart(SECS).then(r => { run.state = r.state; run.st = r.st; }, () => { run.state = 'off'; });
+  try { if (typeof gtag === 'function') gtag('event', 'game_start', { game: GAME, secs: SECS }); } catch (e) { }
 }
 function playStep(dt) {
   acc += dt; let n = Math.floor(acc * HZ); acc -= n / HZ; if (n > 6) { n = 6; acc = 0; }
   V.budget = 14;
-  for (let i = 0; i < n && G.tick < TICKS; i++) { S.step(G); handleEv(G); }
-  const sec = Math.ceil((TICKS - G.tick) / HZ); if (sec !== lastSec) { lastSec = sec; if (sec <= 10 && sec > 0) sWarn(); }
+  for (let i = 0; i < n && G.tick < TK; i++) { S.step(G); handleEv(G); }
+  const sec = Math.ceil((TK - G.tick) / HZ); if (sec !== lastSec) { lastSec = sec; if (sec <= warnOf(SECS) && sec > 0) sWarn(); }
   hudText(G); upsText(G);
-  if (G.tick >= TICKS) finish();
+  if (G.tick >= TK) finish();
 }
 function finish() {
   const s = G; mode = 'fin'; finT = 1.5; big(esc(t('fin'))); sFin(); upsText(s);
-  FIN = { k: s.k, score: S.scoreOf(s), pct: Math.floor((1 - s.hp / s.hp0) * 100), lv: s.lv.slice(), dmg: S.dmgOf(s.lv[2]), log: LOG.slice(), run: RUN, sent: null };
-  try { if (typeof gtag === 'function') gtag('event', 'game_end', { game: GAME, rings: s.k }); } catch (e) { }
+  FIN = { secs: SECS, k: s.k, score: S.scoreOf(s), pct: Math.floor((1 - s.hp / s.hp0) * 100), lv: s.lv.slice(), dmg: S.dmgOf(s.lv[2]), log: LOG.slice(), run: RUN, sent: null };
+  try { if (typeof gtag === 'function') gtag('event', 'game_end', { game: GAME, rings: s.k, secs: SECS }); } catch (e) { }
 }
 
 // ===== 結果 =====
 function showResult(first) {
   const F = FIN; mode = 'result'; show('result'); $('hud').hidden = true; $('ups').hidden = true; big(''); frame();
-  $('rG').textContent = t('resHead'); $('rPct').innerHTML = esc(t('resN', { n: F.k })); $('rDev').textContent = t('resNext', { p: F.pct });
+  $('rG').textContent = t('resHead', { s: F.secs }); $('rPct').innerHTML = esc(t('resN', { n: F.k })); $('rDev').textContent = t('resNext', { p: F.pct });
   $('rFacts').textContent = t('resLv', { b: F.lv[0] + 1, s: F.lv[1] + 1, a: fmt(F.dmg) });
   recUI();
   $('xBtn').textContent = t('xpost'); $('imgBtn').textContent = t('img'); $('vidBtn').textContent = t('video'); $('againBtn').textContent = t('again'); $('topBtn').textContent = t('top'); $('rRank').textContent = t('rank');
@@ -215,14 +219,14 @@ $('recGo').onclick = async () => {
   try { const r = await submit(F, nm); if (FIN !== F) return; F.sent = t('sent', { d: rankTxt(r.rd), a: rankTxt(r.ra) }) + (r.better ? '' : '<br>' + t('notbetter')); recUI(); }
   catch (e) { console.warn(e); if (FIN !== F) return; note.className = 'note err'; note.textContent = t('senderr'); $('recGo').disabled = false; }
 };
-$('againBtn').onclick = () => startGame();
+$('againBtn').onclick = () => startGame(FIN ? FIN.secs : SECS);
 $('topBtn').onclick = () => showTitle();
-$('rRank').onclick = () => openRank('d', 'fin');
+$('rRank').onclick = () => openRank(FIN.secs, 'd', 'fin');
 
 // ===== タイトル =====
 function applyLang() {
   document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : lang; document.title = '円';
-  $('tTitle').textContent = t('title'); $('tSub').textContent = t('sub'); $('tHow').innerHTML = t('how'); $('startBtn').textContent = t('start'); $('rankBtn').textContent = t('rank');
+  $('tTitle').textContent = t('title'); $('tSub').textContent = t('sub'); $('tHow').innerHTML = t('how'); $('tPick').textContent = t('pick'); MODES.forEach(m => { $('m' + m).textContent = t('mBtn', { s: m }); }); $('rankBtn').textContent = t('rank');
   $('langs').innerHTML = ''; LANGS.forEach(([k, n]) => { const b = document.createElement('button'); b.textContent = n; b.className = k === lang ? 'on' : ''; b.onclick = () => { lang = k; ls.set('en_lang', k); applyLang(); }; $('langs').appendChild(b); });
   $('rankBack').textContent = t('back'); $('vShare').textContent = t('vShare'); $('vSave').textContent = t('vSave'); $('vX').textContent = t('xpost'); $('vBack').textContent = t('back');
   $('hTimeL').textContent = t('timeL'); $('hRingsL').textContent = t('ringsL');
@@ -233,8 +237,8 @@ const cheapest = s => { let b = -1, bc = 1e18; for (let y = 0; y < 3; y++) { if 
 function demoNew(pre) { DEMO = S.create(); for (let i = 0; i < pre; i++) { const y = cheapest(DEMO); if (y >= 0) S.buy(DEMO, y); S.step(DEMO); DEMO.ev.length = 0; } viewReset(DEMO); }
 function demoStep(dt) { if (!DEMO || DEMO.tick >= TICKS) demoNew(HZ * 20); acc += dt; let n = Math.floor(acc * HZ); acc -= n / HZ; if (n > 6) { n = 6; acc = 0; } V.budget = 10; V.quiet = true; for (let i = 0; i < n; i++) { const y = cheapest(DEMO); if (y >= 0) S.buy(DEMO, y); S.step(DEMO); handleEv(DEMO); } V.quiet = false; }
 function showTitle() { mode = 'title'; show('title'); $('hud').hidden = true; $('ups').hidden = true; big(''); fxReset(); G = null; demoNew(HZ * (18 + Math.floor(Math.random() * 30))); acc = 0; frame(); }
-$('startBtn').onclick = startGame;
-$('rankBtn').onclick = () => openRank('d', 'title');
+MODES.forEach(m => { $('m' + m).onclick = () => startGame(m); });
+$('rankBtn').onclick = () => openRank(+ls.get('en_mode', 120), 'd', 'title');
 
 // ===== 効果（紙ふぶき・真ん中の数字） =====
 const FXC = $('fx'), fxg = FXC.getContext('2d'); let fxW = 0, fxH = 0;
@@ -253,7 +257,7 @@ function drawHP(g2, W, Hh, s) {
 }
 
 // ===== Xへの投稿 =====
-function postText() { const F = FIN; if (!F) return ''; return t('post', { n: F.k }) + '\n' + t('tags'); }
+function postText() { const F = FIN; if (!F) return ''; return t('post', { n: F.k, s: F.secs }) + '\n' + t('tags'); }
 function shareURL() { return GAME_URL; }
 let QUOTE = {}; if (!PV) fetch('https://ft-red-default-rtdb.asia-southeast1.firebasedatabase.app/xquote/g/' + GAME + '.json').then(r => r.json()).then(d => { if (d && typeof d === 'object') QUOTE = d; }).catch(() => { });
 function quoteURL() { const u = (lang === 'ja' ? QUOTE.ja : QUOTE.en) || ''; return /^https:\/\/x\.com\/[A-Za-z0-9_]{1,15}\/status\/\d{5,25}$/.test(u) ? u : ''; }
@@ -268,7 +272,7 @@ function txt2(g2, s, x, y) { g2.strokeText(s, x, y); g2.fillText(s, x, y); }
 function drawCard(g2, W, Hh, F, a, top) {
   const u = W / 540; g2.save(); g2.globalAlpha = a; g2.textAlign = 'center'; g2.textBaseline = 'alphabetic'; g2.lineJoin = 'round'; g2.strokeStyle = '#000d'; g2.lineWidth = 8 * u;
   const gr = g2.createLinearGradient(0, top - 50 * u, 0, Hh); gr.addColorStop(0, 'rgba(8,5,20,0)'); gr.addColorStop(.22, 'rgba(8,5,20,.82)'); gr.addColorStop(1, 'rgba(8,5,20,.94)'); g2.fillStyle = gr; g2.fillRect(0, top - 50 * u, W, Hh - top + 50 * u);
-  let y = top + 36 * u; g2.fillStyle = '#e7dcff'; fitF(g2, t('resHead'), 28 * u, 900, W - 40 * u); txt2(g2, t('resHead'), W / 2, y); y += 118 * u;
+  let y = top + 36 * u; g2.fillStyle = '#e7dcff'; fitF(g2, t('resHead', { s: F.secs }), 28 * u, 900, W - 40 * u); txt2(g2, t('resHead', { s: F.secs }), W / 2, y); y += 118 * u;
   g2.fillStyle = '#ffd23a'; g2.lineWidth = 12 * u; fitF(g2, t('resN', { n: F.k }), 124 * u, 900, W - 40 * u); txt2(g2, t('resN', { n: F.k }), W / 2, y); y += 52 * u; g2.lineWidth = 8 * u;
   g2.fillStyle = '#ffffff'; fitF(g2, t('resNext', { p: F.pct }), 28 * u, 900, W - 40 * u); txt2(g2, t('resNext', { p: F.pct }), W / 2, y); y += 40 * u;
   const l4 = t('resLv', { b: F.lv[0] + 1, s: F.lv[1] + 1, a: fmt(F.dmg) }); g2.fillStyle = '#c9d0e0'; fitF(g2, l4, 22 * u, 800, W - 40 * u); txt2(g2, l4, W / 2, y);
@@ -297,7 +301,7 @@ async function makeVideo() {
   try { rec = new MediaRecorder(stream2, mime ? { mimeType: mime, videoBitsPerSecond: 4e6 } : {}); } catch (e) { restore0(); shareDone(null, 'mp4'); return; }
   const chunks = []; rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); }; const stopped = new Promise(r => { rec.onstop = r; }); rec.start(200);
   // 強化の記録どおりに、最初から早送りで再生する
-  const SPEED = 10, s = S.create(); let j = 0, a2 = 0, endAt = -1, T = 0, last = performance.now(); viewReset(s); fxReset();
+  /* どの組も12秒ほどの動画になる */ const VT = F.secs * HZ, SPEED = F.secs / 12, s = S.create(); let j = 0, a2 = 0, endAt = -1, T = 0, last = performance.now(); viewReset(s); fxReset();
   R.setPixelRatio(1); R.setSize(W, Hh, false); setCam(W, Hh, 150, 150, 1);
   const CARD = 3.4;
   await new Promise(res => {
@@ -305,16 +309,16 @@ async function makeVideo() {
       const real = Math.min(.3, (now - last) / 1000), dt = Math.min(.05, real); last = now; T += real; TIME += dt;
       if (endAt < 0) {
         a2 += real * SPEED; let n = Math.floor(a2 * HZ); a2 -= n / HZ; if (n > 200) n = 200; V.budget = 14; // おそい端末でも、動画の長さが同じになるようにする
-        for (let q = 0; q < n && s.tick < TICKS; q++) { while (j < F.log.length && F.log[j][0] === s.tick) { S.buy(s, F.log[j][1]); j++; } S.step(s); handleEv(s); }
-        if (s.tick >= TICKS) { endAt = T; sFin(); fxConfetti(clamp(F.k * 3, 20, 140)); setCam(W, Hh, 110, Hh * .42, 1); }
+        for (let q = 0; q < n && s.tick < VT; q++) { while (j < F.log.length && F.log[j][0] === s.tick) { S.buy(s, F.log[j][1]); j++; } S.step(s); handleEv(s); }
+        if (s.tick >= VT) { endAt = T; sFin(); fxConfetti(clamp(F.k * 3, 20, 140)); setCam(W, Hh, 110, Hh * .42, 1); }
       }
       viewSync(s, dt); fxStep(dt); R.render(SC, CAM); g2.clearRect(0, 0, W, Hh); g2.drawImage(R.domElement, 0, 0, W, Hh); drawHP(g2, W, Hh, s);
       if (endAt >= 0) drawCard(g2, W, Hh, F, sm((T - endAt - .3) / .4), Hh * .6);
       else {
-        g2.save(); g2.lineJoin = 'round'; g2.strokeStyle = '#000c'; const left = Math.max(0, (TICKS - s.tick) / HZ);
-        g2.fillStyle = '#ffffff22'; g2.fillRect(20, 96, W - 40, 8); const gr = g2.createLinearGradient(20, 0, W - 20, 0); gr.addColorStop(0, '#ffd23a'); gr.addColorStop(.5, '#ff7ad9'); gr.addColorStop(1, '#7b6cff'); g2.fillStyle = gr; g2.fillRect(20, 96, (W - 40) * left / S.SECS, 8);
+        g2.save(); g2.lineJoin = 'round'; g2.strokeStyle = '#000c'; const left = Math.max(0, (VT - s.tick) / HZ);
+        g2.fillStyle = '#ffffff22'; g2.fillRect(20, 96, W - 40, 8); const gr = g2.createLinearGradient(20, 0, W - 20, 0); gr.addColorStop(0, '#ffd23a'); gr.addColorStop(.5, '#ff7ad9'); gr.addColorStop(1, '#7b6cff'); g2.fillStyle = gr; g2.fillRect(20, 96, (W - 40) * left / F.secs, 8);
         g2.lineWidth = 6; g2.textAlign = 'left'; g2.fillStyle = '#fff'; g2.font = '900 30px ' + FF; txt2(g2, left.toFixed(1), 20, 140); g2.textAlign = 'right'; g2.fillStyle = '#ffd23a'; g2.font = '900 40px ' + FF; txt2(g2, s.k + t('unit'), W - 20, 146);
-        g2.textAlign = 'center'; g2.fillStyle = '#ffd23a'; g2.font = '900 24px ' + FF; txt2(g2, t('vHow') + '（' + t('vSpeed', { n: SPEED }) + '）', W / 2, Hh - 108);
+        g2.textAlign = 'center'; g2.fillStyle = '#ffd23a'; g2.font = '900 24px ' + FF; txt2(g2, t('vHow', { s: F.secs }) + '（' + t('vSpeed', { n: SPEED }) + '）', W / 2, Hh - 108);
         g2.fillStyle = '#e7dcff'; fitF(g2, t('resLv', { b: s.lv[0] + 1, s: s.lv[1] + 1, a: fmt(S.dmgOf(s.lv[2])) }), 22, 900, W - 40); txt2(g2, t('resLv', { b: s.lv[0] + 1, s: s.lv[1] + 1, a: fmt(S.dmgOf(s.lv[2])) }), W / 2, Hh - 70); g2.restore();
       }
       drawFX(g2, W, Hh); drawBrand(g2, W, Hh);
@@ -327,7 +331,7 @@ function shareDone(blob, ext) {
   vidBusy = false; mode = 'share'; show('vidPanel'); const isImg = ext === 'png'; $('vidPrev').hidden = true; $('imgPrev').hidden = true; const F = FIN; if (G) viewReset(G); restoreView();
   if (!blob || !blob.size) { $('vMsg').textContent = t('vfail'); $('vShare').hidden = $('vSave').hidden = true; return; }
   const url = URL.createObjectURL(blob); if (isImg) { $('imgPrev').hidden = false; $('imgPrev').src = url; } else { $('vidPrev').hidden = false; $('vidPrev').src = url; $('vidPrev').play().catch(() => { }); }
-  const nm = GAME + '_' + F.k + '.' + ext; const file = new File([blob], nm, { type: blob.type }); const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+  const nm = GAME + '_' + F.secs + 's_' + F.k + '.' + ext; const file = new File([blob], nm, { type: blob.type }); const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
   $('vShare').hidden = !canShare; $('vSave').hidden = false; $('vMsg').textContent = canShare ? t(isImg ? 'imade' : 'vmade') : t(isImg ? 'ihint' : 'shareHint');
   $('vShare').onclick = async () => { try { await navigator.share({ files: [file], text: postText() + '\n' + shareURL() + (quoteURL() ? '\n' + quoteURL() : '') }); } catch (e) { } };
   $('vSave').onclick = () => { const a = document.createElement('a'); a.href = url; a.download = nm; document.body.appendChild(a); a.click(); a.remove(); };
@@ -356,9 +360,9 @@ const QP = q => '.json?' + (q || '') + NSQ;
 const PUT = (url, body) => fetchR(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const TS = { '.sv': 'timestamp' };
 // 遊びはじめたとき：はじめた時刻をサーバーに書く（120秒たたないと記録できないようにするため）
-async function netStart() {
+async function netStart(secs) {
   if (NONET) return { state: PV.off ? 'off' : 'yes', st: Date.now() };
-  const a = await fbAuth(); const r2 = await PUT(DB('run/' + a.uid) + QA(a), { st: TS }); if (!r2.ok) throw new Error('run ' + r2.status); const j = await r2.json().catch(() => null); let st = j && j.st; if (typeof st !== 'number') { const s = await fetchR(DB('run/' + a.uid) + QA(a)).then(x => x.json()); st = s.st; }
+  const a = await fbAuth(); const r2 = await PUT(DB('run/' + a.uid) + QA(a), { st: TS, m: secs }); if (!r2.ok) throw new Error('run ' + r2.status); const j = await r2.json().catch(() => null); let st = j && j.st; if (typeof st !== 'number') { const s = await fetchR(DB('run/' + a.uid) + QA(a)).then(x => x.json()); st = s.st; }
   return { state: 'yes', st };
 }
 const dayKey = ms => Math.floor((ms + 32400000) / 86400000);
@@ -368,39 +372,40 @@ async function submit(F, nm) {
   if (!F.run || F.run.state !== 'yes') throw new Error('norun');
   const a = await fbAuth(); const rec = { n: nm, k: F.score, lg: S.encLog(F.log), st: F.run.st, v: 1, at: TS };
   const dk = dayKey(Date.now()); const recD = { ...rec, dk, ds: dk * 1000 + rec.k };
-  const [old, oldD] = await Promise.all([fetchR(DB('b/all/' + a.uid) + QP()).then(x => x.ok ? x.json() : null).catch(() => null), fetchR(DB('b/d/' + a.uid) + QP()).then(x => x.ok ? x.json() : null).catch(() => null)]);
+  const [old, oldD] = await Promise.all([fetchR(DB(BP(F.secs) + '/all/' + a.uid) + QP()).then(x => x.ok ? x.json() : null).catch(() => null), fetchR(DB(BP(F.secs) + '/d/' + a.uid) + QP()).then(x => x.ok ? x.json() : null).catch(() => null)]);
   const okA = !old || !(old.k >= rec.k), okD = !oldD || oldD.dk !== dk || !(oldD.k >= rec.k);
-  if (okD) { const r = await PUT(DB('b/d/' + a.uid) + QA(a), recD); if (!r.ok) throw new Error('d ' + r.status); }
-  if (okA) { const r = await PUT(DB('b/all/' + a.uid) + QA(a), rec); if (!r.ok) throw new Error('all ' + r.status); }
-  const [rd, ra] = await Promise.all([myRank('d', a.uid), myRank('all', a.uid)]); return { rd, ra, better: okA };
+  if (okD) { const r = await PUT(DB(BP(F.secs) + '/d/' + a.uid) + QA(a), recD); if (!r.ok) throw new Error('d ' + r.status); }
+  if (okA) { const r = await PUT(DB(BP(F.secs) + '/all/' + a.uid) + QA(a), rec); if (!r.ok) throw new Error('all ' + r.status); }
+  const [rd, ra] = await Promise.all([myRank(F.secs, 'd', a.uid), myRank(F.secs, 'all', a.uid)]); return { rd, ra, better: okA };
 }
 // 記録が本当か：強化の記録どおりに計算しなおして、合わない記録は出さない
-function checkRow(r) {
-  if (!r || typeof r.k !== 'number' || typeof r.lg !== 'string' || typeof r.n !== 'string') return null; const L = S.decLog(r.lg); if (!L) return null;
-  const s = S.replayAll(L); if (!s) return null; if (Math.abs(S.scoreOf(s) - r.k) > 1e-9) return null;
+function checkRow(r, secs) {
+  if (!r || typeof r.k !== 'number' || typeof r.lg !== 'string' || typeof r.n !== 'string') return null; const L = S.decLog(r.lg, secs * HZ); if (!L) return null;
+  const s = S.replayAll(L, secs * HZ); if (!s) return null; if (Math.abs(S.scoreOf(s) - r.k) > 1e-9) return null;
   r.rings = s.k; r.pct = Math.floor((1 - s.hp / s.hp0) * 100); return r;
 }
-async function loadBoard(when) {
+async function loadBoard(secs, when) {
   const today = dayKey(Date.now()); let url;
-  if (when === 'd') url = DB('b/d') + QP('orderBy=%22ds%22&startAt=' + (today * 1000) + '&endAt=' + (today * 1000 + 999.9999) + '&limitToLast=' + TOPN);
-  else url = DB('b/all') + QP('orderBy=%22k%22&limitToLast=' + TOPN);
+  if (when === 'd') url = DB(BP(secs) + '/d') + QP('orderBy=%22ds%22&startAt=' + (today * 1000) + '&endAt=' + (today * 1000 + 999.9999) + '&limitToLast=' + TOPN);
+  else url = DB(BP(secs) + '/all') + QP('orderBy=%22k%22&limitToLast=' + TOPN);
   const [d, h] = await Promise.all([fetch(url).then(r => { if (!r.ok) throw 0; return r.json() }), fetch(DB('hidden') + QP()).then(r => r.ok ? r.json() : null).catch(() => null)]);
-  const rows = Object.entries(d || {}).map(([id, v]) => ({ ...v, id })).filter(r => !(h && h[r.id])).map(r => checkRow(r)).filter(Boolean).sort((a, b) => b.k - a.k || a.at - b.at);
+  const rows = Object.entries(d || {}).map(([id, v]) => ({ ...v, id })).filter(r => !(h && h[r.id])).map(r => checkRow(r, secs)).filter(Boolean).sort((a, b) => b.k - a.k || a.at - b.at);
   rows.forEach((r, i) => { r.rk = i + 1; }); return rows;
 }
 const rankTxt = r => r ? t('rankN', { r }) : t('rankOut');
-async function myRank(when, uid) { try { const rows = await loadBoard(when); const r = rows.find(x => x.id === uid); return r ? r.rk : null; } catch (e) { return null; } }
-let RK = { when: 'd', from: null, rows: [] };
-async function openRank(when, from) {
-  RK = { when, from: from || RK.from, rows: [] }; if (RK.from === 'fin') mode = 'rank'; show('rankPanel'); $('hud').hidden = true; $('ups').hidden = true; big('');
+async function myRank(secs, when, uid) { try { const rows = await loadBoard(secs, when); const r = rows.find(x => x.id === uid); return r ? r.rk : null; } catch (e) { return null; } }
+let RK = { secs: 120, when: 'd', from: null, rows: [] };
+async function openRank(secs, when, from) {
+  if (!MODES.includes(secs)) secs = 120; const my = RK = { secs, when, from: from || RK.from, rows: [] }; if (RK.from === 'fin') mode = 'rank'; show('rankPanel'); $('hud').hidden = true; $('ups').hidden = true; big('');
   $('rkTitle').textContent = t('rank'); $('rkNote').textContent = t('rkNote');
-  $('rkWhen').querySelectorAll('button').forEach(b => { const w = b.dataset.w; b.textContent = t(w === 'd' ? 'today' : 'alltime'); b.className = w === when ? 'on' : ''; b.onclick = () => openRank(w, RK.from); });
+  $('rkWhen').querySelectorAll('button').forEach(b => { const w = b.dataset.w; b.textContent = t(w === 'd' ? 'today' : 'alltime'); b.className = w === when ? 'on' : ''; b.onclick = () => openRank(RK.secs, w, RK.from); });
+  $('rkMode').querySelectorAll('button').forEach(b => { const m = +b.dataset.m; b.textContent = t('mBtn', { s: m }); b.className = m === secs ? 'on' : ''; b.onclick = () => openRank(m, RK.when, RK.from); });
   const box = $('rankBox'); box.innerHTML = '<p>' + t('loading') + '</p>';
   const rowH = (r, me) => '<tr' + (me ? ' class="me"' : '') + '><td class="r">' + r.rk + '</td><td class="n">' + esc(r.n) + '</td><td class="c">' + esc(t('rowS', { n: r.rings, p: r.pct })) + '</td></tr>';
   try {
-    let rows; if (NONET) { rows = [{ n: '円こわし名人', rings: 72, pct: 31, rk: 1 }, { n: ls.get('en_name', 'なすび'), rings: 64, pct: 80, rk: 2, me: 1 }, { n: 'のんびり', rings: 41, pct: 5, rk: 3 }]; } else rows = await loadBoard(when);
-    RK.rows = rows; const myId = (ls.get('en_auth', null) || {}).uid; let h = '<table class="rank">' + rows.slice(0, TOPN).map(r => rowH(r, r.me || (!!myId && r.id === myId))).join(''); if (!rows.length) h += '<tr><td></td><td colspan="2">' + t('empty') + '</td></tr>'; box.innerHTML = h + '</table>';
-  } catch (e) { box.innerHTML = '<p>' + t('rankerr') + '</p>'; }
+    let rows; if (NONET) { rows = [{ n: '円こわし名人', rings: 72, pct: 31, rk: 1 }, { n: ls.get('en_name', 'なすび'), rings: 64, pct: 80, rk: 2, me: 1 }, { n: 'のんびり', rings: 41, pct: 5, rk: 3 }]; } else rows = await loadBoard(secs, when);
+    if (RK !== my) return; RK.rows = rows; const myId = (ls.get('en_auth', null) || {}).uid; let h = '<table class="rank">' + rows.slice(0, TOPN).map(r => rowH(r, r.me || (!!myId && r.id === myId))).join(''); if (!rows.length) h += '<tr><td></td><td colspan="2">' + t('empty') + '</td></tr>'; box.innerHTML = h + '</table>';
+  } catch (e) { if (RK === my) box.innerHTML = '<p>' + t('rankerr') + '</p>'; }
 }
 $('rankBack').onclick = () => { if (RK.from === 'fin' && FIN) showResult(false); else showTitle(); };
 
@@ -439,4 +444,4 @@ if (OGP || ICON) {
 }
 window.__EN = { S, get mode() { return mode }, get G() { return G }, get FIN() { return FIN }, get RUN() { return RUN }, get RK() { return RK }, get LOG() { return LOG }, get V() { return V }, tick: frameStep, startGame, showTitle, showResult, openRank, loadBoard, makeImage, makeVideo, buy: tryBuy, frame,
   // 試験用：n コマすすめる（強化はいちばん安いものを買う）
-  adv(n, auto) { if (mode === 'count') { mode = 'play'; big(''); } for (let i = 0; i < n && G && G.tick < TICKS; i++) { if (auto) { const y = cheapest(G); if (y >= 0 && S.buy(G, y)) LOG.push([G.tick, y]); } S.step(G); G.ev.length = 0; } if (G) { viewReset(G); hudText(G); upsText(G); if (G.tick >= TICKS && mode === 'play') finish(); } } };
+  adv(n, auto) { if (mode === 'count') { mode = 'play'; big(''); } for (let i = 0; i < n && G && G.tick < TK; i++) { if (auto) { const y = cheapest(G); if (y >= 0 && S.buy(G, y)) LOG.push([G.tick, y]); } S.step(G); G.ev.length = 0; } if (G) { viewReset(G); hudText(G); upsText(G); if (G.tick >= TK && mode === 'play') finish(); } }, get SECS() { return SECS } };

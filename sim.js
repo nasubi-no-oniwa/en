@@ -50,6 +50,6 @@ export function step(s) {
 export const scoreOf = s => s.k + Math.floor((1 - s.hp / s.hp0) * 1000) / 1000;
 // 強化の記録：[[コマ, 種類], ...] を文字にする
 export const encLog = L => L.map(([t, y]) => t.toString(36) + 'BSA'[y]).join('');
-export function decLog(str) { if (typeof str !== 'string' || str.length > 4000) return null; const L = []; const re = /([0-9a-z]+)([BSA])/g; let m, pos = 0, last = -1; while ((m = re.exec(str))) { if (m.index !== pos) return null; pos = re.lastIndex; const t = parseInt(m[1], 36); if (!(t >= 0 && t < TICKS) || t < last) return null; last = t; L.push([t, 'BSA'.indexOf(m[2])]); } if (pos !== str.length) return null; return L; }
+export function decLog(str, ticks = TICKS) { if (typeof str !== 'string' || str.length > 4000) return null; const L = []; const re = /([0-9a-z]+)([BSA])/g; let m, pos = 0, last = -1; while ((m = re.exec(str))) { if (m.index !== pos) return null; pos = re.lastIndex; const t = parseInt(m[1], 36); if (!(t >= 0 && t < ticks) || t < last) return null; last = t; L.push([t, 'BSA'.indexOf(m[2])]); } if (pos !== str.length) return null; return L; }
 // 記録どおりに最初から最後まで計算しなおす（買えない強化があれば null）
-export function replayAll(L) { const s = create(); let j = 0; for (let t = 0; t < TICKS; t++) { while (j < L.length && L[j][0] === t) { if (!buy(s, L[j][1])) return null; j++; } step(s); s.ev.length = 0; } if (j !== L.length) return null; return s; }
+export function replayAll(L, ticks = TICKS) { const s = create(); let j = 0; for (let t = 0; t < ticks; t++) { while (j < L.length && L[j][0] === t) { if (!buy(s, L[j][1])) return null; j++; } step(s); s.ev.length = 0; } if (j !== L.length) return null; return s; }

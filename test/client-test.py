@@ -53,6 +53,9 @@ async def main():
         fin=await pg.evaluate("({k:__EN.FIN.k,score:__EN.FIN.score,lv:__EN.FIN.lv,n:__EN.FIN.log.length})"); print('  結果',json.dumps(fin),flush=True)
         ex('30秒ぶんで終わり、円がこわれている',fin['k']>=5 and await pg.evaluate('__EN.G.tick===1800 && __EN.FIN.secs===30'))
         ex('強化の記録から計算しなおしても同じ',await pg.evaluate("(()=>{const S=__EN.S;const L=S.decLog(S.encLog(__EN.FIN.log),1800);const s=S.replayAll(L,1800);return !!s && S.scoreOf(s)===__EN.FIN.score;})()"))
+        # 結果の個数は0から数え上がる演出があるので、数え終わるのを待ってから見る
+        try: await pg.wait_for_function("document.getElementById('rPct').textContent.indexOf(String(__EN.FIN.k))>=0",timeout=5000)
+        except Exception: pass
         ex('結果に個数が出る',str(fin['k']) in await pg.inner_text('#rPct'))
         # 30秒たつ前は、サーバーが記録を受けつけない
         await pg.fill('#nameIn','テスト'); await pg.click('#recGo')
